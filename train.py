@@ -8,7 +8,6 @@ import argparse
 from os.path import join as pjoin
 import numpy as np
 
-from tokenizer import Tokenizer
 from dataloader import get_dataloader
 from model import BERT_MLM
 
@@ -25,7 +24,7 @@ parser.add_argument('--n_layers', type=int, default=2, help='Number of encoder l
 parser.add_argument('--dropout', type=float, default=0.2, help='The dropout of the BERT model.')
 parser.add_argument('--heads', type=int, default=128, help='The dimension in which the codes are embedded.')
 
-parser.add_argument('--batch_size', type=int, default=128, help='The size of the batches when training.')
+parser.add_argument('--batch_size', type=int, default=32, help='The size of the batches when training.')
 parser.add_argument('--learning_rate', type=float, default=5e-4, help='The learning rate when training.')
 parser.add_argument('--epochs', type=int, default=100, help='Number of training epochs.')
 
@@ -48,29 +47,16 @@ epochs = args.epochs
 
 debug = args.debug
 
-with open(pjoin(JSON_DIR, "train.json"), "r") as f:
-    train_data = f.readlines()
-train_data = list(map(ast.literal_eval, train_data))
-
-tok = Tokenizer("tok", {"[PAD]":0, "[UNK]":1, "[MSK]":2})
-
-train_tokens = list(map(lambda x: x[2:], train_data))
-raw_tokens = [ehr for e in train_tokens for ehr in e]
-
-tok.fit(raw_tokens)
-
-train_dl = get_dataloader(batch_size=batchSize, drop_last=True, shuffle=True, mode="train", device="cpu", mlm_index="all", json_path="data/datasets_full", tokenizer=tok)
-valid_dl = get_dataloader(batch_size=batchSize, drop_last=True, shuffle=True, mode="valid", device="cpu", mlm_index="all", json_path="data/datasets_full", tokenizer=tok)
-
 device = 'cuda'
 
-model = BERT_MLM(d_embedding, d_model, tok, dropout=dropout, tokenizer_codes=tok.encoder, nhead=nhead, device=device)
+train_dl = get_dataloader(batch_size=batchSize, drop_last=True, mode="train", device=device, mlm_index="all", json_path="data/datasets_full", tokenizer_path="data/datasets_full/tokenizer.json")
+valid_dl = get_dataloader(batch_size=batchSize, drop_last=True, mode="valid", device=device, mlm_index="all", json_path="data/datasets_full", tokenizer_path="data/datasets_full/tokenizer.json")
+
+model = BERT_MLM(d_embedding, d_model, tokenizer_path="data/datasets_full/tokenizer.json", dropout=dropout, nhead=nhead, device=device)
 #model.load_state_dict(torch.load("saved_models/2106_1/2106_1.pt"))
 
 criterion = nn.NLLLoss().to(device)
-optimizer = torch.optim.Adam(model.parameters(), lr=learningRate
-    )
-
+optimizer = torch.optim.Adam(model.parameters(), lr=learningRate)
 
 for epoch in range(1, epochs+1):
     print("Epoch", epoch)
@@ -81,8 +67,8 @@ for epoch in range(1, epochs+1):
     for batch in train_dl:
         optimizer.zero_grad()
         
-        tokens = batch["tokens"].to(device)
-        targets = batch["target_tokens"].to(device)
+        tokens = batch["tokens"]
+        targets = batch["target_tokens"]
         
         predicted_tokens = model(tokens)
 
@@ -96,9 +82,6 @@ for epoch in range(1, epochs+1):
         epoch_loss.append(loss.detach().item())
         epoch_acc.append((targets == mlm_predicted_tokens.argmax(dim=1)).float().mean().item())
 
-        if debug:
-            break
-
     epoch_loss = np.array(epoch_loss).mean()
     epoch_acc = np.array(epoch_acc).mean()
 
@@ -108,8 +91,8 @@ for epoch in range(1, epochs+1):
     epoch_loss, epoch_acc = [], []
 
     for batch in valid_dl:
-        tokens = batch["tokens"].to(device)
-        targets = batch["target_tokens"].to(device)
+        tokens = batch["tokens"]
+        targets = batch["target_tokens"]
         
         predicted_tokens = model(tokens)
 
@@ -120,9 +103,6 @@ for epoch in range(1, epochs+1):
         
         epoch_loss.append(loss.detach().item())
         epoch_acc.append((targets == mlm_predicted_tokens.argmax(dim=1)).float().mean().item())
-
-        if debug:
-            break
 
     epoch_loss = np.array(epoch_loss).mean()
     epoch_acc = np.array(epoch_acc).mean()

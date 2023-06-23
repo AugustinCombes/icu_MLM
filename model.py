@@ -3,10 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import math
+import json
 
 class StayEmbedding(nn.Module):
 
-    def __init__(self, d_model, max_len=150, tokenizer_codes=None, device='cpu'):
+    def __init__(self, d_model, max_len=150, num_tokens=None, device='cpu'):
         super().__init__()
 
         #compute time encoding
@@ -19,7 +20,7 @@ class StayEmbedding(nn.Module):
         self.time_encoding = pe.to(device)
 
         #compute code embedding
-        self.embedding = nn.Embedding(1+len(tokenizer_codes), d_model, padding_idx=0, device=device)
+        self.embedding = nn.Embedding(1 + num_tokens, d_model, padding_idx=0, device=device)
 
     def forward(self, codes):
         batch_size, n_timesteps = codes.shape
@@ -34,11 +35,13 @@ class StayEmbedding(nn.Module):
     
 class BERT_MLM(nn.Module):
 
-    def __init__(self, d_embedding, d_model, tokenizer, dropout=0.1, n_layers=2, nhead=4, tokenizer_codes=None, device='cpu'):
+    def __init__(self, d_embedding, d_model, tokenizer_path, dropout=0.1, n_layers=2, nhead=4, device='cpu'):
         super().__init__()
 
+        tokenizer = json.load(open(tokenizer_path))
+
         #embedding
-        self.embedding = StayEmbedding(d_embedding, tokenizer_codes=tokenizer_codes, device=device)
+        self.embedding = StayEmbedding(d_embedding, num_tokens=len(tokenizer), device=device)
 
         #projection
         self.proj = nn.Linear(d_embedding, d_model).to(device)
@@ -48,7 +51,7 @@ class BERT_MLM(nn.Module):
         self.bert = nn.TransformerEncoder(layer, n_layers).to(device)
 
         #classification
-        self.cls = nn.Linear(d_model, len(tokenizer.encoder), bias=True).to(device)
+        self.cls = nn.Linear(d_model, len(tokenizer), bias=True).to(device)
 
     def forward(self, tokens):
         x = self.embedding(tokens)

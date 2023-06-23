@@ -1,6 +1,10 @@
-import numpy as np
+import ast
+import os
+import json
 import hashlib
 import os
+
+import numpy as np
 
 class Tokenizer():
     def __init__(self,
@@ -67,3 +71,18 @@ class Tokenizer():
     
     def get_vocab(self):
         return self.encoder.keys()
+
+JSON_DIR = "data/datasets_full"
+
+with open(os.path.join(JSON_DIR, "train.json"), "r") as f:
+    train_data = f.readlines()
+train_data = list(map(ast.literal_eval, train_data))
+
+tok = Tokenizer("tok", {"[PAD]":0, "[UNK]":1, "[MSK]":2})
+
+train_tokens = list(map(lambda x: x[1:], train_data))
+raw_tokens = [ehr for e in train_tokens for ehr in e]
+
+tok.fit(raw_tokens)
+
+json.dump(tok.encoder, open("data/datasets_full/tokenizer.json", "w"))
