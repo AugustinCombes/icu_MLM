@@ -17,7 +17,7 @@ epochs = 100
 
 def define_model(trial):
     n_layers = trial.suggest_int("n_layers", 1, 4)
-    nhead = trial.suggest_int("n_layers", 4, 16, 4)
+    nhead = trial.suggest_int("nhead", 4, 16, 4)
     d_embedding = trial.suggest_int("d_embedding", 128, 1024, 128)
     d_model = trial.suggest_int("d_model", 128, 1024, 128)
     dropout = trial.suggest_float("dropout", 0.2, 0.5)
